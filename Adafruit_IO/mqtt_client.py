@@ -72,6 +72,7 @@ class MQTTClient(object):
         self._client.on_disconnect = self._mqtt_disconnect
         self._client.on_message    = self._mqtt_message
         self._client.on_subscribe  = self._mqtt_subscribe
+        self._client.on_publish = self._mqtt_publish
         self._connected = False
 
 
@@ -133,6 +134,16 @@ class MQTTClient(object):
         logger.debug('Client called on_subscribe')
         if self.on_subscribe is not None:
           self.on_subscribe(self, userdata, mid, granted_qos)
+
+    def _mqtt_publish(self, userdata, mid, granted_qos):
+        """Internal callback for publish, called when the Adafruit IO MQTT broker
+        responds to a PUBLISH request.
+
+        """
+        logger.debug('Client called on_publish')
+        if self._client.on_publish is not None:
+            self._client.on_publish(self, userdata, mid, granted_qos)
+
 
     def connect(self, **kwargs):
         """Connect to the Adafruit.IO service.  Must be called before any loop
@@ -268,6 +279,7 @@ class MQTTClient(object):
       """Unsubscribes from a specified MQTT topic.
       Note: this does not prevent publishing to a topic, it will unsubscribe
       from receiving messages via on_message.
+
       """
       if feed_id is not None:
         self._client.unsubscribe('{0}/feeds/{1}'.format(self._username, feed_id))
@@ -282,25 +294,27 @@ class MQTTClient(object):
 
       :param string feed_id: The ID of the feed to update.
       :parm string value: The new value to publish to the feed
+
       """
       (res, self._pub_mid) = self._client.publish('{0}/feeds/{1}/get'.format(self._username, feed_id),
           payload='')
 
-    def publish(self, feed_id, value=None, group_id=None, feed_user=None):
+    def publish(self, feed_id, value, group_id=None, feed_user=None, qos=0):
         """Publish a value to a specified feed.
 
-        Params:
-        - feed_id: The id of the feed to update.
-        - value: The new value to publish to the feed.
-        - (optional) group_id: The id of the group to update. 
-        - (optional) feed_user: The feed owner's username. Used for Sharing Feeds.
+        :param str value: Value for publishing to feed.
+        :param int qos: The QoS to use when publishing. Defaults to 0.
+        :param str string feed_id: The identifier of the feed to update.
+        :param str string group_id: Optional identifier for feed group.
+        :param str feed_user: Optional identifier for feed user, used for shared feeds.
+
         """
         if feed_user is not None: # shared feed
           (res, self._pub_mid) = self._client.publish('{0}/feeds/{1}'.format(feed_user, feed_id),
-              payload=value)
+              payload=value, qos=qos)
         elif group_id is not None: # group-specified feed
-          self._client.publish('{0}/feeds/{1}.{2}'.format(self._username, group_id, feed_id),
-              payload=value)
+          (res, self._pub_mid) = self._client.publish('{0}/feeds/{1}.{2}'.format(self._username, group_id, feed_id),
+              payload=value, qos=qos)
         else: # regular feed
           (res, self._pub_mid) = self._client.publish('{0}/feeds/{1}'.format(self._username, feed_id),
-              payload=value)
+              payload=value, qos=qos)
